@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#10192d" />
+  <title>ENCS4380 | Dynamic Characteristics Toolkit</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#eaf0ff;background:#0b1020;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0}header{padding:30px max(20px,calc((100vw - 1180px)/2));background:linear-gradient(115deg,#17264b,#10192d);border-bottom:1px solid #334466}main{max-width:1180px;margin:0 auto;padding:24px 20px 50px}h1{margin:4px 0 8px;font-size:clamp(1.6rem,4vw,2.6rem)}h2{font-size:1.2rem;margin:0 0 16px}p{color:#b9c9e7;line-height:1.6}.eyebrow{font-size:.8rem;color:#72dbc9;letter-spacing:.12em;text-transform:uppercase;font-weight:700}.layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start}.card{background:#151e32;border:1px solid #2c3c5d;border-radius:16px;padding:20px;margin-bottom:18px;min-width:0}.control{margin:18px 0}.control label{display:flex;justify-content:space-between;gap:8px;color:#dce7fb;font-weight:600}output{color:#65e1c8;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#65e1c8;margin:14px 0 4px}select,input[type=number]{width:100%;background:#0e1729;color:white;border:1px solid #435679;border-radius:9px;padding:12px;font:inherit}.hint{font-size:.85rem;margin:4px 0;color:#aabbd7}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.metric{background:#0d1628;border-radius:11px;padding:13px}.metric small{display:block;color:#b2c3dc;margin-bottom:7px}.metric strong{font-size:1.18rem;color:#79e8d2}.graph{height:370px;width:100%}.graph.small{height:295px}.notice{background:#102738;border:1px solid #276978;border-radius:10px;padding:12px;color:#bdebe7}.prediction{display:grid;gap:10px}button{background:#65e1c8;color:#062024;border:0;padding:12px 16px;border-radius:10px;font-weight:750;cursor:pointer}button:hover{background:#a0f1e2}button.secondary{background:#253956;color:#e8f3ff}.checks{display:grid;gap:10px}.check{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #33435b;border-radius:10px;padding:12px}.check span{color:#cad7ee}.pass{color:#75e0a7;font-weight:800}.fail{color:#ff9b9b;font-weight:800}.muted{color:#acbed8;font-size:.88rem}footer{padding-top:20px;color:#a8b8d2}.hidden{display:none}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}code{color:#89e3d6}@media(max-width:850px){.layout{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.card{padding:15px}.graph{height:330px}}@media(max-width:460px){.metrics{grid-template-columns:1fr 1fr}.metric strong{font-size:1rem}.graph{height:295px}}
+  </style>
+</head>
+<body>
+<header><div class="eyebrow">ENCS4380 · Interfacing Techniques</div><h1>Dynamic Characteristics Toolkit</h1><p>Module 1: First-order time response. Explore how a thermometer-like sensor responds to changing inputs.</p></header>
+<main>
+  <div class="layout">
+    <aside>
+      <section class="card">
+        <h2>Experiment controls</h2>
+        <div class="control"><label for="gain">Sensor gain (K) <output id="gainValue">1.00</output></label><input id="gain" type="range" min="0.2" max="3" step="0.1" value="1" /></div>
+        <div class="control"><label for="tau">Time constant (τ) <output id="tauValue">2.0 s</output></label><input id="tau" type="range" min="0.2" max="10" step="0.1" value="2" /></div>
+        <div class="control"><label for="inputType">Input type</label><select id="inputType"><option value="step">Step</option><option value="ramp">Ramp</option></select></div>
+        <div id="stepOptions"><div class="control"><label for="amplitude">Step amplitude (A) <output id="amplitudeValue">10.0</output></label><input id="amplitude" type="range" min="1" max="20" step="0.5" value="10" /></div></div>
+        <div id="rampOptions" class="hidden"><div class="control"><label for="rampSlope">Ramp slope (a) <output id="rampSlopeValue">1.0 /s</output></label><input id="rampSlope" type="range" min="0.2" max="5" step="0.1" value="1" /></div></div>
+        <button id="reset" class="secondary">Reset controls</button>
+      </section>
+      <section class="card"><h2>Predict, then check</h2><div class="prediction"><label for="prediction">If τ increases while K stays fixed, what happens to the response?</label><select id="prediction"><option value="">Choose a prediction</option><option value="slower">It becomes slower</option><option value="faster">It becomes faster</option><option value="unchanged">Nothing changes</option></select><button id="checkPrediction">Check prediction</button><div id="feedback" class="notice hidden" role="status" aria-live="polite"></div></div></section>
+      <section class="card"><h2>Equations</h2><p><strong>Model:</strong> τ dy/dt + y = Kx</p><p><strong>Step:</strong> y(t) = KA(1 − e<sup>−t/τ</sup>)</p><p><strong>Ramp:</strong> y(t) = Ka[t − τ(1 − e<sup>−t/τ</sup>)]</p><p class="hint">Assumes initial output y(0) = 0 and input x(t) = A for a step or x(t) = at for a ramp.</p></section>
+    </aside>
+    <div>
+      <section class="card"><h2 id="responseTitle">Step response</h2><div class="metrics"><div class="metric"><small>Time constant</small><strong id="mTau"></strong></div><div class="metric"><small>Gain</small><strong id="mGain"></strong></div><div class="metric"><small id="metric3Name">Final output KA</small><strong id="mFinal"></strong></div><div class="metric"><small id="metric4Name">At τ</small><strong id="mTauOut"></strong></div><div class="metric"><small id="metric5Name">At 3τ</small><strong id="m3TauOut"></strong></div><div class="metric"><small id="metric6Name">Steady-state error</small><strong id="mError"></strong></div></div><div id="responsePlot" class="graph" aria-label="Interactive first-order response graph"></div><p class="hint" id="responseExplanation"></p></section>
+      <section class="card"><h2>Error fraction (logarithmic scale)</h2><p class="muted">For a step, e(t)/(KA) = exp(−t/τ). On a natural-log scale, ln(error fraction) = −t/τ, a straight line with slope −1/τ.</p><div id="errorPlot" class="graph small" aria-label="Logarithmic error fraction plot"></div><p class="hint" id="slopeText"></p></section>
+      <section class="card"><h2>Validation checks</h2><p class="muted">Required first-order step checks from the homework. Calculated independently of the active input selection.</p><div id="checks" class="checks"></div></section>
+    </div>
+  </div>
+  <footer>ENCS4380 Homework 1 · Module 1 · All graphs and calculations run in the browser. <a href="https://plotly.com/javascript/" style="color:#77e5d3">Plotly.js</a> is used for plotting.</footer>
+</main>
+<script src="script.js"></script>
+</body>
+</html>
