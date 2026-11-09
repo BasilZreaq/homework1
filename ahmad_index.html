@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Module 2 - First-Order Frequency Response</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: white;
+      color: #222;
+      margin: 20px;
+    }
+
+    main {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    section {
+      border: 1px solid #ccc;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .slider-row, .result-row, .chart-row {
+      display: flex;
+      gap: 20px;
+    }
+
+    .slider, .result, .chart-box {
+      flex: 1;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    .chart-box {
+      height: 300px;
+    }
+
+    .small-chart {
+      height: 260px;
+    }
+
+    .result {
+      background: #f3f3f3;
+      padding: 12px;
+    }
+
+    .result strong {
+      display: block;
+      font-size: 1.3em;
+      margin: 5px 0;
+    }
+
+    .pass {
+      color: green;
+      font-weight: bold;
+    }
+
+    .fail {
+      color: darkred;
+      font-weight: bold;
+    }
+
+    button {
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        margin: 10px;
+      }
+
+      .slider-row, .result-row, .chart-row {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .chart-box {
+        height: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dynamic Characteristics Toolkit</h1>
+    <p>Module 2: First-Order Frequency Response</p>
+
+    <section>
+      <h2>Input settings</h2>
+      <div class="slider-row">
+        <div class="slider">
+          <label for="tau">Time constant, τ: <span id="tauValue">0.20</span> s</label>
+          <input id="tau" type="range" min="0.05" max="2" step="0.01" value="0.2">
+        </div>
+        <div class="slider">
+          <label for="omega">Input frequency, ω: <span id="omegaValue">2.00</span> rad/s</label>
+          <input id="omega" type="range" min="0.1" max="20" step="0.1" value="2">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Current response</h2>
+      <div class="result-row">
+        <div class="result">Amplitude ratio (M)<strong id="mValue">—</strong>M close to 1 means the sensor follows the input amplitude well.</div>
+        <div class="result">Phase lag<strong id="phaseValue">—</strong>A larger phase lag means the sensor responds more slowly.</div>
+      </div>
+      <p>M = 1 / √(1 + (ωτ)²)</p>
+      <p>φ = −atan(ωτ)</p>
+    </section>
+
+    <section>
+      <h2>Input and output sine waves</h2>
+      <div class="chart-box"><canvas id="signalChart"></canvas></div>
+    </section>
+
+    <section>
+      <h2>Bode plots</h2>
+      <p>Cutoff frequency, ωc = 1 / τ = <strong id="cutoffValue">—</strong> rad/s</p>
+      <p>Blue curve: frequency response. Red point: cutoff frequency (ωc).</p>
+      <div class="chart-row">
+        <div class="chart-box small-chart"><canvas id="magnitudeChart"></canvas></div>
+        <div class="chart-box small-chart"><canvas id="phaseChart"></canvas></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Dynamic-error calculator</h2>
+      <div class="result-row">
+        <div class="result">Signed dynamic error (δ = M − 1)<strong id="deltaValue">—</strong>Absolute dynamic error percentage<strong id="errorValue">—</strong>Formula: |M − 1| × 100%</div>
+        <div class="result">Maximum allowed error<strong>5%</strong><span id="errorStatus"></span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Predict, then check</h2>
+      <form id="predictionForm">
+        <p>What do you think will happen to the amplitude ratio when the input frequency increases?</p>
+        <label><input type="radio" name="prediction" value="increases"> It increases.</label><br>
+        <label><input type="radio" name="prediction" value="decreases"> It decreases.</label><br>
+        <label><input type="radio" name="prediction" value="same"> It stays the same.</label><br><br>
+        <button type="submit">Check my prediction</button>
+      </form>
+      <p id="predictionResult"></p>
+    </section>
+
+    <section>
+      <h2>Validation case: τ = 0.2 s and ω = 2 rad/s</h2>
+      <p>Amplitude ratio (expected 0.93): <strong id="validationM">—</strong> <span id="validationMStatus"></span></p>
+      <p>Phase lag (expected 21.8°): <strong id="validationPhase">—</strong> <span id="validationPhaseStatus"></span></p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js"></script>
+  <script>
+    const tauSlider = document.getElementById("tau");
+    const omegaSlider = document.getElementById("omega");
+
+    // Chart.js expects chart points in the form {x: value, y: value}.
+    const signalChart = new Chart(document.getElementById("signalChart"), {
+      type: "line",
+      data: {
+        datasets: [
+          { label: "Input x(t) = sin(ωt)", data: [], borderColor: "blue", pointRadius: 0 },
+          { label: "Output y(t) = M sin(ωt + φ)", data: [], borderColor: "orange", pointRadius: 0 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          x: { type: "linear", title: { display: true, text: "Time (s)" } },
+          y: { min: -1, max: 1, title: { display: true, text: "Amplitude" } }
+        }
+      }
+    });
+
+    const magnitudeChart = new Chart(document.getElementById("magnitudeChart"), {
+      type: "line",
+      data: {
+        datasets: [
+          { label: "Magnitude (dB)", data: [], borderColor: "blue", pointRadius: 0 },
+          { label: "Cutoff frequency", data: [], showLine: false, pointRadius: 6, pointBackgroundColor: "red" }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          x: { type: "logarithmic", min: 0.01, max: 1000, title: { display: true, text: "Frequency (rad/s)" } },
+          y: { min: -80, max: 0, title: { display: true, text: "Magnitude (dB)" } }
+        }
+      }
+    });
+
+    const phaseChart = new Chart(document.getElementById("phaseChart"), {
+      type: "line",
+      data: {
+        datasets: [
+          { label: "Phase (degrees)", data: [], borderColor: "blue", pointRadius: 0 },
+          { label: "Cutoff frequency", data: [], showLine: false, pointRadius: 6, pointBackgroundColor: "red" }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        scales: {
+          x: { type: "logarithmic", min: 0.01, max: 1000, title: { display: true, text: "Frequency (rad/s)" } },
+          y: { min: -90, max: 0, title: { display: true, text: "Phase (degrees)" } }
+        }
+      }
+    });
+
+    function updatePage() {
+      const tau = Number(tauSlider.value);
+      const omega = Number(omegaSlider.value);
+      const product = omega * tau;
+
+      // Calculate the amplitude ratio and phase in radians, then convert phase to degrees.
+      const amplitudeRatio = 1 / Math.sqrt(1 + product * product);
+      const phase = -Math.atan(product);
+      const phaseDegrees = phase * 180 / Math.PI;
+      const cutoff = 1 / tau;
+      const signedDynamicError = amplitudeRatio - 1;
+      const dynamicError = Math.abs(amplitudeRatio - 1) * 100;
+
+      document.getElementById("tauValue").textContent = tau.toFixed(2);
+      document.getElementById("omegaValue").textContent = omega.toFixed(2);
+      document.getElementById("mValue").textContent = amplitudeRatio.toFixed(3);
+      document.getElementById("phaseValue").textContent = Math.abs(phaseDegrees).toFixed(2) + "° lag";
+      document.getElementById("cutoffValue").textContent = cutoff.toFixed(3);
+      document.getElementById("deltaValue").textContent = signedDynamicError.toFixed(4);
+      document.getElementById("errorValue").textContent = dynamicError.toFixed(2) + "%";
+
+      const errorStatus = document.getElementById("errorStatus");
+      if (dynamicError <= 5) {
+        errorStatus.textContent = "Meets the 5% requirement";
+        errorStatus.className = "pass";
+      } else {
+        errorStatus.textContent = "Does not meet the 5% requirement";
+        errorStatus.className = "fail";
+      }
+
+      // Make two periods of the input and output waves for the signal graph.
+      const period = 2 * Math.PI / omega;
+      const signalInput = [];
+      const signalOutput = [];
+      for (let i = 0; i <= 100; i++) {
+        const time = 2 * period * i / 100;
+        signalInput.push({ x: time, y: Math.sin(omega * time) });
+        signalOutput.push({ x: time, y: amplitudeRatio * Math.sin(omega * time + phase) });
+      }
+      signalChart.data.datasets[0].data = signalInput;
+      signalChart.data.datasets[1].data = signalOutput;
+      signalChart.update();
+
+      // Make frequency points for both Bode graphs and mark the cutoff point.
+      const magnitudePoints = [];
+      const phasePoints = [];
+      for (let i = 0; i <= 100; i++) {
+        const frequency = 0.01 * Math.pow(100000, i / 100);
+        const frequencyProduct = frequency * tau;
+        const magnitude = 1 / Math.sqrt(1 + frequencyProduct * frequencyProduct);
+        magnitudePoints.push({ x: frequency, y: 20 * Math.log10(magnitude) });
+        phasePoints.push({ x: frequency, y: -Math.atan(frequencyProduct) * 180 / Math.PI });
+      }
+
+      const cutoffMagnitude = 20 * Math.log10(1 / Math.sqrt(2));
+      magnitudeChart.data.datasets[0].data = magnitudePoints;
+      magnitudeChart.data.datasets[1].data = [{ x: cutoff, y: cutoffMagnitude }];
+      magnitudeChart.update();
+
+      phaseChart.data.datasets[0].data = phasePoints;
+      phaseChart.data.datasets[1].data = [{ x: cutoff, y: -45 }];
+      phaseChart.update();
+
+      // Check the fixed homework example using its own values.
+      const testProduct = 2 * 0.2;
+      const testRatio = 1 / Math.sqrt(1 + testProduct * testProduct);
+      const testPhase = Math.atan(testProduct) * 180 / Math.PI;
+      document.getElementById("validationM").textContent = testRatio.toFixed(3);
+      document.getElementById("validationPhase").textContent = testPhase.toFixed(2) + "°";
+
+      const ratioStatus = document.getElementById("validationMStatus");
+      const phaseStatus = document.getElementById("validationPhaseStatus");
+      if (Math.abs(testRatio - 0.93) <= 0.01) {
+        ratioStatus.textContent = "PASS";
+        ratioStatus.className = "pass";
+      } else {
+        ratioStatus.textContent = "FAIL";
+        ratioStatus.className = "fail";
+      }
+      if (Math.abs(testPhase - 21.8) <= 0.2) {
+        phaseStatus.textContent = "PASS";
+        phaseStatus.className = "pass";
+      } else {
+        phaseStatus.textContent = "FAIL";
+        phaseStatus.className = "fail";
+      }
+    }
+
+    tauSlider.addEventListener("input", updatePage);
+    omegaSlider.addEventListener("input", updatePage);
+
+    document.getElementById("predictionForm").addEventListener("submit", function(event) {
+      event.preventDefault();
+      const answer = document.querySelector('input[name="prediction"]:checked');
+      const result = document.getElementById("predictionResult");
+
+      if (answer === null) {
+        result.textContent = "Choose an answer first.";
+      } else if (answer.value === "decreases") {
+        result.textContent = "Correct. As frequency increases, the amplitude ratio decreases.";
+        result.className = "pass";
+      } else {
+        result.textContent = "Not quite. As frequency increases, the amplitude ratio decreases.";
+        result.className = "fail";
+      }
+    });
+
+    updatePage();
+  </script>
+</body>
+</html>
