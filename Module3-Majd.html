@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="ENCS4380 Module 3: explore second-order step response, poles and mass-spring-damper state space.">
+<title>Module 3 | Second-order response</title>
+<!-- Page styling: kept here so this file can be opened on its own. -->
+<style>
+/* Simple layout for the group's Module 3 page. */
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: #222; font-family: Arial, sans-serif; font-size: 15px; }
+header, main { max-width: 1120px; margin: auto; padding: 20px; }
+header { border-bottom: 1px solid #ccc; }
+nav { display: flex; gap: 20px; margin-bottom: 24px; font-size: 14px; }
+a { color: #175ca0; }
+nav a[aria-current] { color: #222; font-weight: bold; text-decoration: none; }
+h1 { font-size: 26px; margin: 10px 0; font-weight: 600; }
+h2 { font-size: 18px; margin: 0 0 16px; }
+h3 { font-size: 15px; margin-top: 20px; }
+p { line-height: 1.55; }
+.intro { margin: 0; color: #555; font-size: 14px; }
+.eyebrow { color: #666; font-size: 13px; }
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 28px; align-items: start; }
+.layout > * { min-width: 0; }
+aside { border-right: 1px solid #ddd; padding-right: 22px; }
+.card { min-width: 0; padding: 0 0 22px; margin-bottom: 24px; border-bottom: 1px solid #ddd; }
+.control { margin: 19px 0; }
+.control label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+output { font-variant-numeric: tabular-nums; color: #333; }
+input[type=range] { width: 100%; margin: 12px 0 0; accent-color: #286da8; }
+button, select { font: inherit; font-size: 13px; }
+button { padding: 7px 9px; border: 1px solid #aaa; border-radius: 3px; background: #f5f5f5; color: #222; cursor: pointer; }
+button:hover { background: #e8e8e8; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #286da8; outline-offset: 3px; }
+select { width: 100%; padding: 8px; margin: 12px 0; border: 1px solid #aaa; background: white; color: #222; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.presets button { font-size: 12px; padding: 6px; }
+.hint, .legend-note { font-size: 12px; color: #555; line-height: 1.6; }
+.section-head { display: flex; gap: 14px; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+.section-head h2 { margin: 0; }
+.badge { font-size: 13px; color: #555; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 0; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; }
+.metric small { display: block; color: #555; font-size: 11px; margin-bottom: 7px; }
+.metric strong { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.graph { height: 340px; width: 100%; }
+.graph.small { height: 260px; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.values { font-family: monospace; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.matrix-line { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0; font-size: 13px; }
+.matrix { display: inline-grid; grid-template-columns: repeat(2, 1fr); gap: 8px 22px; border-left: 1px solid #222; border-right: 1px solid #222; padding: 7px 12px; font-family: monospace; text-align: right; }
+.vector { grid-template-columns: 1fr; }
+.equation { font-family: monospace; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+.state-caption { font-size: 14px; }
+.notice { border-left: 3px solid #286da8; background: #f3f6f9; padding: 10px; font-size: 13px; line-height: 1.5; margin-top: 12px; }
+.hidden { display: none; }
+.checks { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.5; }
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; }
+th { background: #f5f5f5; font-weight: 600; }
+.pass { color: #276d32; }
+.fail { color: #ae2424; }
+details summary { cursor: pointer; font-size: 14px; }
+details p { font-size: 13px; }
+footer { font-size: 12px; color: #666; }
+.failure { color: #a23c16; padding: 20px; }
+@media(max-width:950px) { .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .two { grid-template-columns: minmax(0,1fr); gap: 0; } }
+@media(max-width:720px) {
+  header, main { padding: 16px; }
+  .layout { grid-template-columns: minmax(0,1fr); gap: 0; }
+  aside { border: 0; padding: 0; }
+  .controls { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 20px; }
+  .control { margin: 12px 0; }
+  .graph { height: 300px; }
+  h1 { font-size: 23px; }
+}
+@media(max-width:380px) { .controls { grid-template-columns:minmax(0,1fr); } .section-head { flex-wrap:wrap; gap:8px; } }
+
+</style>
+
+
+</head>
+<body>
+<header>
+<div class="eyebrow">ENCS4380 - Homework 1 · Majd · Module 3</div>
+<h1>Module 3: Second-order response</h1>
+<p class="intro">Change the damping ratio and natural frequency, or use the mass, damping and spring controls.</p>
+</header>
+<main>
+<div class="layout">
+<aside>
+<section class="card">
+<h2>Parameters</h2>
+<div class="presets" aria-label="Damping examples"><button class="secondary" data-zeta="0.5">Underdamped</button><button class="secondary" data-zeta="1">Critical</button><button class="secondary" data-zeta="1.5">Overdamped</button></div>
+<div class="controls">
+<div class="control"><label for="zeta">Damping ratio ζ <output id="zetaValue"></output></label><input id="zeta" type="range" min="0.1" max="2.5" step="0.01" value="0.5"></div>
+<div class="control"><label for="wn">Natural frequency ωₙ <output id="wnValue"></output></label><input id="wn" type="range" min="0.5" max="6" step="0.05" value="2"></div>
+</div>
+<p class="hint">These controls keep m fixed and calculate k = mωₙ² and b = 2ζmωₙ.</p>
+<hr style="border:0;border-top:1px solid #ddd;margin:18px 0">
+<h3>Mass–spring–damper</h3>
+<div class="controls">
+<div class="control"><label for="mass">Mass m <output id="massValue"></output></label><input id="mass" type="range" min="0.25" max="5" step="0.05" value="1"></div>
+<div class="control"><label for="damping">Damping b <output id="dampingValue"></output></label><input id="damping" type="range" min="0.05" max="40" step="0.05" value="2"></div>
+<div class="control"><label for="spring">Spring k <output id="springValue"></output></label><input id="spring" type="range" min="0.25" max="40" step="0.05" value="4"></div>
+</div>
+<p class="hint">Or change m, b and k directly. Both sets of controls describe the same system.</p>
+<button id="reset" class="secondary">Reset to m=1, b=2, k=4</button>
+</section>
+<section class="card">
+<h2>Predict, then check</h2>
+<label for="prediction" class="hint">At fixed ωₙ, what happens to overshoot if ζ increases from 0.5 to 1?</label>
+<select id="prediction"><option value="">Choose a prediction</option><option value="zero">It falls to zero</option><option value="more">It increases</option><option value="same">It stays the same</option></select>
+<button id="checkPrediction">Check prediction</button>
+<div id="feedback" class="notice hidden" role="status" aria-live="polite"></div>
+<p class="hint">Choose first, then try the damping presets.</p>
+</section>
+<section class="card">
+<h2>The model</h2>
+<p class="equation">mẍ + bẋ + kx = F(t)<br>ωₙ = √(k/m)<br>ζ = b / (2√(km))<br>K = 1/k</p>
+<p class="equation">G(s) = Kωₙ² /<br>(s² + 2ζωₙs + ωₙ²)</p>
+<p class="hint">Force input F(t) = 1 N for t ≥ 0. Initially x = 0 m and ẋ = 0 m/s. The final displacement is x∞ = 1/k.</p>
+</section>
+</aside>
+<div>
+<section class="card">
+<div class="section-head"><h2>Step response</h2><span id="regime" class="badge"></span></div>
+<div class="metrics">
+<div class="metric"><small>Rise time · 10–90%</small><strong id="rise"></strong></div>
+<div class="metric"><small>Peak time</small><strong id="peak"></strong></div>
+<div class="metric"><small>Overshoot</small><strong id="overshoot"></strong></div>
+<div class="metric"><small>Settling time · ±2%</small><strong id="settling"></strong></div>
+</div>
+<div id="stepPlot" class="graph" role="img" aria-label="Normalized second-order step response with rise, peak and settling markers"></div>
+<p id="responseNote" class="hint metric-note"></p>
+<p class="legend-note">Output is normalized by x∞. Shading marks the ±2% band. Hover over markers to read the measurements.</p>
+</section>
+<div class="two">
+<section class="card">
+<h2>Poles in the s-plane</h2>
+<div id="polePlot" class="graph small" role="img" aria-label="Transfer function poles and state matrix eigenvalues"></div>
+<div id="poleValues" class="values"></div>
+<p class="hint">× = transfer-function pole; open circle = eigenvalue of A. They overlap because these are two descriptions of the same dynamics.</p>
+</section>
+<section class="card">
+<h2>Phase plane</h2>
+<div id="phasePlot" class="graph small" role="img" aria-label="Displacement-velocity trajectory during the force step"></div>
+<p id="phaseNote" class="hint"></p>
+</section>
+</div>
+<section class="card">
+<div class="section-head"><h2>State space</h2><span class="badge">x₁ = x · x₂ = ẋ</span></div>
+<p class="state-caption">ẋ = Ax + BF, y = Cx + DF</p>
+<div class="matrix-line"><span>A =</span><div id="matrixA" class="matrix"></div><span>B =</span><div id="matrixB" class="matrix vector"></div><span>C = [1 0] &nbsp; D = 0</span></div>
+<p id="stateEquations" class="equation"></p>
+<p class="hint">A = [[0, 1], [−k/m, −b/m]] and B = [[0], [1/m]]. The phase-plane curve uses x₁ = x∞q and x₂ = x∞ωₙdq/du from the same closed-form solution.</p>
+</section>
+<section class="card">
+<h2>Validation checks</h2>
+<p class="hint">Fixed homework examples, independent of the current sliders. Checks 4–6 belong to Module 3.</p>
+<div class="checks"><table><thead><tr><th>Check</th><th>Expected</th><th>Calculated</th><th>Result</th></tr></thead><tbody id="validation"></tbody></table></div>
+<p class="hint">Tolerance: 0.1 percentage point for overshoot; 0.001 s⁻¹ for pole/eigenvalue components.</p>
+</section>
+<section class="card">
+<details><summary>Explanation</summary>
+<p><strong>ζ &lt; 1:</strong> the response oscillates around its final value. The poles are a complex-conjugate pair and the phase trajectory spirals toward equilibrium.</p>
+<p><strong>ζ = 1:</strong> critical damping. This is the fastest non-oscillating response at a fixed natural frequency. The two real poles coincide.</p>
+<p><strong>ζ &gt; 1:</strong> overdamping. Two distinct negative real poles give a slower, non-oscillating response.</p>
+<p><strong>Metrics:</strong> rise time is the interval from the first 10% crossing to the first 90% crossing. Peak time is the first maximum; it is not finite for a monotonic response. Settling time is the last entry into the ±2% band, found by searching the closed-form curve and refining the crossing. It is not the approximation 4/(ζωₙ).</p>
+<p><strong>Changing ωₙ:</strong> at fixed ζ it changes the time scale, but not the overshoot percentage. In this force-to-displacement model, changing k also changes K = 1/k; normalizing the main plot makes the timing easier to compare.</p>
+</details>
+</section>
+</div>
+</div>
+<footer>ENCS4380 Homework 1 · Module 3 · Majd · Closed-form responses, calculated in your browser. Plots use Plotly.js.</footer>
+</main>
+<noscript><p class="failure">Enable JavaScript to run the experiment.</p></noscript>
+<!-- Plotting library. Internet access is needed to load Plotly. -->
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<!-- Part 1: model equations and response measurements. -->
+<script>
+// Module 3 mathematics. No plotting or page code in this file.
+// A unit force is applied at t=0; displacement and velocity start at zero.
+(function (root) {
+  'use strict';
+
+  function parameters(m, b, k) {
+    return { m, b, k, wn: Math.sqrt(k / m), zeta: b / (2 * Math.sqrt(k * m)), gain: 1 / k };
+  }
+
+  // Return normalized displacement q = x / xFinal and dq/du, where u = wn*t.
+  // Three closed-form solutions of q'' + 2*zeta*q' + q = 1.
+  function response(u, zeta) {
+    if (Math.abs(zeta - 1) < 1e-8) {
+      const e = Math.exp(-u);
+      return { q: 1 - (1 + u) * e, dq: u * e };
+    }
+    if (zeta < 1) {
+      const d = Math.sqrt(1 - zeta * zeta);
+      const e = Math.exp(-zeta * u);
+      return { q: 1 - e * (Math.cos(d * u) + zeta * Math.sin(d * u) / d),
+        dq: e * Math.sin(d * u) / d };
+    }
+    const d = Math.sqrt(zeta * zeta - 1);
+    // -1/(zeta+d) equals -zeta+d, without subtracting close numbers.
+    const r1 = -1 / (zeta + d), r2 = -zeta - d;
+    const e1 = Math.exp(r1 * u), e2 = Math.exp(r2 * u);
+    return { q: 1 + (r2 * e1 - r1 * e2) / (r1 - r2),
+      dq: r1 * r2 * (e1 - e2) / (r1 - r2) };
+  }
+
+  function poles(zeta, wn) {
+    if (zeta < 1) {
+      const im = wn * Math.sqrt(1 - zeta * zeta);
+      return [{ re: -zeta * wn, im }, { re: -zeta * wn, im: -im }];
+    }
+    const d = Math.sqrt(zeta * zeta - 1);
+    return [{ re: -wn / (zeta + d), im: 0 }, { re: -wn * (zeta + d), im: 0 }];
+  }
+
+  // Compute eigenvalues from A's trace and determinant, independently of poles().
+  function eigenvalues(m, b, k) {
+    const trace = -b / m, determinant = k / m;
+    const discriminant = trace * trace - 4 * determinant;
+    if (discriminant < 0) {
+      const im = Math.sqrt(-discriminant) / 2;
+      return [{ re: trace / 2, im }, { re: trace / 2, im: -im }];
+    }
+    return [{ re: (trace + Math.sqrt(discriminant)) / 2, im: 0 },
+      { re: (trace - Math.sqrt(discriminant)) / 2, im: 0 }];
+  }
+
+  function bisect(fn, low, high) {
+    let fLow = fn(low);
+    for (let i = 0; i < 50; i++) {
+      const mid = (low + high) / 2;
+      if (fLow * fn(mid) <= 0) high = mid;
+      else { low = mid; fLow = fn(low); }
+    }
+    return (low + high) / 2;
+  }
+
+  function metrics(zeta, wn) {
+    const under = zeta < 1;
+    const slow = under ? zeta : 1 / (zeta + Math.sqrt(zeta * zeta - 1));
+    // At this horizon the remaining error is safely below 2% for all slider values.
+    const end = 14 / slow;
+    // Before the first peak the curve increases, so both rise crossings are unique.
+    const firstPeak = under ? Math.PI / Math.sqrt(1 - zeta * zeta) : end;
+    const u10 = bisect(u => response(u, zeta).q - 0.1, 0, firstPeak);
+    const u90 = bisect(u => response(u, zeta).q - 0.9, 0, firstPeak);
+    let low = 0, high = end;
+    if (under) {
+      const d = Math.sqrt(1 - zeta * zeta);
+      // At extremum n, |q-1| = exp(-zeta*n*pi/d).
+      // Find the last extremum outside 2%, then refine the following crossing.
+      const n = Math.floor(Math.log(50) * d / (Math.PI * zeta));
+      low = n * Math.PI / d;
+      high = (n + 1) * Math.PI / d;
+    }
+    const settling = bisect(u => Math.abs(response(u, zeta).q - 1) - 0.02, low, high);
+    return { rise: (u90 - u10) / wn, t10: u10 / wn, t90: u90 / wn,
+      peak: under ? Math.PI / (wn * Math.sqrt(1 - zeta * zeta)) : null,
+      overshoot: under ? 100 * Math.exp(-Math.PI * zeta / Math.sqrt(1 - zeta * zeta)) : 0,
+      settling: settling / wn, horizon: Math.max(1.35 * settling / wn, 8 / wn) };
+  }
+
+  function sample(p, count = 1600) {
+    const info = metrics(p.zeta, p.wn);
+    // Keep enough points per oscillation even with very light damping.
+    const n = Math.max(count, Math.ceil(info.horizon * p.wn * 25));
+    const times = [], q = [], x = [], v = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i * info.horizon / n;
+      const value = response(p.wn * t, p.zeta);
+      times.push(t); q.push(value.q); x.push(p.gain * value.q); v.push(p.gain * p.wn * value.dq);
+    }
+    return { times, q, x, v, info };
+  }
+
+  const api = { parameters, response, poles, eigenvalues, metrics, sample };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Module3Model = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<!-- Part 2: slider events, labels, validation table and plots. -->
+<script>
+// Module 3 page controls and plots. The equations are in module3-model.js.
+(function () {
+  'use strict';
+  const model = window.Module3Model;
+  const get = id => document.getElementById(id);
+  const fmt = (value, digits = 3) => value.toFixed(digits);
+  const ids = ['zeta', 'wn', 'mass', 'damping', 'spring'];
+  const options = { responsive: true, displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+  let p = model.parameters(1, 2, 4);
+
+  function draw(id, traces, extra = {}) {
+    const base = { paper_bgcolor: '#ffffff', plot_bgcolor: '#ffffff',
+      font: { color: '#333333', size: 11 }, margin: { l: 54, r: 16, t: 26, b: 52 },
+      xaxis: { title: { text: 'Time (s)' }, gridcolor: '#e4e4e4', zerolinecolor: '#999999' },
+      yaxis: { title: { text: 'Normalized output x / x∞' }, gridcolor: '#e4e4e4', zerolinecolor: '#999999' },
+      showlegend: false, hovermode: 'closest' };
+    Plotly.react(id, traces, { ...base, ...extra,
+      xaxis: { ...base.xaxis, ...extra.xaxis }, yaxis: { ...base.yaxis, ...extra.yaxis } }, options);
+  }
+
+  function setSlider(id, value) {
+    const input = get(id);
+    // A derived value may lie outside the usual slider range. Keep it reachable.
+    input.min = Math.min(Number(input.min), value);
+    input.max = Math.max(Number(input.max), value);
+    input.value = value;
+  }
+
+  function updateControls() {
+    const values = { zeta: p.zeta, wn: p.wn, mass: p.m, damping: p.b, spring: p.k };
+    const units = { zeta: '', wn: ' rad/s', mass: ' kg', damping: ' N·s/m', spring: ' N/m' };
+    ids.forEach(id => { setSlider(id, values[id]); get(id + 'Value').textContent = fmt(values[id], 2) + units[id]; });
+    get('regime').textContent = Math.abs(p.zeta - 1) < 1e-8 ? 'Critically damped' : p.zeta < 1 ? 'Underdamped' : 'Overdamped';
+  }
+
+  function stepPlot(data) {
+    const a = data.info;
+    const markerTimes = [a.t10, a.t90, a.settling];
+    const labels = ['10% crossing', '90% crossing', 'Settling time (2%)'];
+    const colors = ['#b96917', '#b96917', '#666666'];
+    if (a.peak !== null) { markerTimes.push(a.peak); labels.push('First peak'); colors.push('#a23c55'); }
+    draw('stepPlot', [
+      { x: data.times, y: data.q, type: 'scatter', mode: 'lines', name: 'Response', line: { color: '#286da8', width: 3 }, hovertemplate: 't = %{x:.3f} s<br>x/x∞ = %{y:.4f}<extra>Response</extra>' },
+      { x: markerTimes, y: markerTimes.map(t => model.response(p.wn * t, p.zeta).q),
+        mode: 'markers', name: 'Measurements', marker: { size: 9, color: colors }, text: labels,
+        hovertemplate: '%{text}<br>t = %{x:.3f} s<br>x/x∞ = %{y:.4f}<extra></extra>' }
+    ], { xaxis: { range: [0, a.horizon] }, yaxis: { range: [0, Math.max(1.15, 1.12 * (1 + a.overshoot / 100))] },
+      shapes: [
+        { type: 'rect', xref: 'paper', x0: 0, x1: 1, y0: .98, y1: 1.02, fillcolor: '#286da8', opacity: .13, line: { width: 0 }, layer: 'below' },
+        { type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#888888', dash: 'dash', width: 1 } },
+        { type: 'line', x0: a.settling, x1: a.settling, y0: 0, y1: 1.02, line: { color: '#666666', dash: 'dot', width: 1 } }
+      ], annotations: [{ x: a.settling, y: 0.06, text: 'tₛ', showarrow: false, xanchor: 'left', xshift: 4, font: { color: '#666666' } }] });
+    get('rise').textContent = fmt(a.rise) + ' s';
+    get('peak').textContent = a.peak === null ? 'No finite peak' : fmt(a.peak) + ' s';
+    get('overshoot').textContent = fmt(a.overshoot, 2) + '%';
+    get('settling').textContent = fmt(a.settling) + ' s';
+    get('responseNote').textContent = `10% at ${fmt(a.t10)} s → 90% at ${fmt(a.t90)} s. Final displacement x∞ = ${fmt(p.gain)} m for a 1 N step.`;
+  }
+
+  function complex(value) {
+    return Math.abs(value.im) < 1e-9 ? fmt(value.re) : fmt(value.re) + (value.im >= 0 ? ' + j' : ' − j') + fmt(Math.abs(value.im));
+  }
+
+  function polePlot() {
+    const poles = model.poles(p.zeta, p.wn);
+    const eig = model.eigenvalues(p.m, p.b, p.k);
+    const extent = Math.max(p.wn, ...poles.map(v => Math.hypot(v.re, v.im))) * 1.25;
+    draw('polePlot', [
+      { x: eig.map(v => v.re), y: eig.map(v => v.im), mode: 'markers', name: 'Eigenvalues of A', marker: { symbol: 'circle-open', size: 19, color: '#b96917', line: { width: 2 } }, hovertemplate: 'λ = %{x:.3f} + j(%{y:.3f})<extra>Eigenvalue</extra>' },
+      { x: poles.map(v => v.re), y: poles.map(v => v.im), mode: 'markers', name: 'Transfer-function poles', marker: { symbol: 'x', size: 10, color: '#286da8' }, hovertemplate: 's = %{x:.3f} + j(%{y:.3f})<extra>Pole</extra>' }
+    ], { xaxis: { title: { text: 'Real (s⁻¹)' }, range: [-extent, extent * .15] },
+      yaxis: { title: { text: 'Imaginary (s⁻¹)' }, range: [-extent, extent] } });
+    get('poleValues').textContent = `Poles: ${complex(poles[0])}, ${complex(poles[1])}\n`;
+    const line = document.createElement('div');
+    line.textContent = `eig(A): ${complex(eig[0])}, ${complex(eig[1])}`;
+    get('poleValues').appendChild(line);
+  }
+
+  function phasePlot(data) {
+    draw('phasePlot', [
+      { x: data.x, y: data.v, mode: 'lines', name: 'Trajectory', line: { color: '#286da8', width: 2.5 }, hovertemplate: 'x₁ = %{x:.4f} m<br>x₂ = %{y:.4f} m/s<extra>Trajectory</extra>' },
+      { x: [0], y: [0], mode: 'markers', name: 'Start', marker: { color: '#b96917', size: 8 }, hovertemplate: 'Start: (0, 0)<extra></extra>' },
+      { x: [p.gain], y: [0], mode: 'markers', name: 'Equilibrium', marker: { symbol: 'circle-open', size: 12, color: '#286da8' }, hovertemplate: 'Equilibrium: (%{x:.4f} m, 0 m/s)<extra></extra>' }
+    ], { xaxis: { title: { text: 'x₁ · displacement (m)' } }, yaxis: { title: { text: 'x₂ · velocity (m/s)' } } });
+    get('phaseNote').textContent = (p.zeta < 1 ? 'The trajectory spirals toward equilibrium.' : 'The trajectory approaches equilibrium without spiraling.') + ' Filled dot: start (0, 0). Open circle: equilibrium (1/k, 0). Time moves along the curve from the filled dot.';
+  }
+
+  function statePanel() {
+    get('matrixA').innerHTML = `<span>0</span><span>1</span><span>${fmt(-p.k / p.m)}</span><span>${fmt(-p.b / p.m)}</span>`;
+    get('matrixB').innerHTML = `<span>0</span><span>${fmt(1 / p.m)}</span>`;
+    get('stateEquations').textContent = `ẋ₁ = x₂;  ẋ₂ = −${fmt(p.k / p.m)}x₁ − ${fmt(p.b / p.m)}x₂ + ${fmt(1 / p.m)}F;  y = x₁.`;
+  }
+
+  function validation() {
+    const p0 = model.parameters(1, 2, 4);
+    const poles = model.poles(p0.zeta, p0.wn), eig = model.eigenvalues(1, 2, 4);
+    const same = poles.every((v, i) => Math.abs(v.re - eig[i].re) < 1e-9 && Math.abs(v.im - eig[i].im) < 1e-9);
+    // Check the implemented curve at its first peak, rather than echoing the overshoot formula.
+    const peak = Math.PI / (2 * Math.sqrt(.75));
+    const overshoot = (model.response(2 * peak, .5).q - 1) * 100;
+    let criticalOvershoot = 0;
+    for (let u = 0; u <= 25; u += .01) criticalOvershoot = Math.max(criticalOvershoot, (model.response(u, 1).q - 1) * 100);
+    const tests = [
+      { name: '4 · ζ = 0.5 overshoot', expected: '16.3%', actual: fmt(overshoot, 3) + '%', pass: Math.abs(overshoot - 16.3) <= .1 },
+      { name: '5 · ζ = 1 overshoot', expected: '0%', actual: fmt(criticalOvershoot, 3) + '%', pass: criticalOvershoot < 1e-8 },
+      { name: '6 · m=1, b=2, k=4', expected: '−1 ± j1.732', actual: complex(eig[0]) + '; ' + complex(eig[1]), pass: same && Math.abs(eig[0].re + 1) < .001 && Math.abs(eig[0].im - 1.732) < .001 }
+    ];
+    get('validation').innerHTML = tests.map(t => `<tr><td>${t.name}</td><td>${t.expected}</td><td>${t.actual}</td><td class="${t.pass ? 'pass' : 'fail'}">${t.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('');
+  }
+
+  function update() {
+    updateControls();
+    const data = model.sample(p);
+    stepPlot(data); polePlot(); phasePlot(data); statePanel();
+  }
+
+  function change(id) {
+    const value = Number(get(id).value);
+    if (id === 'zeta' || id === 'wn') {
+      const zeta = id === 'zeta' ? value : p.zeta;
+      const wn = id === 'wn' ? value : p.wn;
+      p = model.parameters(p.m, 2 * zeta * p.m * wn, p.m * wn * wn);
+    } else {
+      const key = { mass: 'm', damping: 'b', spring: 'k' }[id];
+      p = model.parameters(key === 'm' ? value : p.m, key === 'b' ? value : p.b, key === 'k' ? value : p.k);
+    }
+    update();
+  }
+
+  if (!window.Plotly) {
+    ['stepPlot', 'polePlot', 'phasePlot'].forEach(id => { get(id).textContent = 'Plotly could not load. Connect to the internet and refresh the page.'; get(id).classList.add('failure'); });
+    return;
+  }
+  ids.forEach(id => get(id).addEventListener('input', () => change(id)));
+  document.querySelectorAll('[data-zeta]').forEach(button => button.addEventListener('click', () => {
+    const zeta = Number(button.dataset.zeta);
+    p = model.parameters(p.m, 2 * zeta * p.m * p.wn, p.k); update();
+  }));
+  get('reset').addEventListener('click', () => {
+    p = model.parameters(1, 2, 4); get('prediction').value = '';
+    get('feedback').classList.add('hidden'); update();
+  });
+  get('checkPrediction').addEventListener('click', () => {
+    const answer = get('prediction').value;
+    get('feedback').classList.remove('hidden');
+    get('feedback').textContent = !answer ? 'Choose a prediction first.' :
+      (answer === 'zero' ? 'Correct. ' : 'Try again: overshoot falls to zero. ') +
+      'At ζ = 0.5 the overshoot is 16.3%. At ζ = 1 the response reaches its final value without crossing it. Compare the two presets.';
+  });
+  validation(); update();
+})();
+
+</script>
+</body></html>
