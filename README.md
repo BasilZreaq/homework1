@@ -29,9 +29,9 @@ https://github.com/majdds/ENCS4380-Micromouse'
 | Member | Responsibility |
 |---|---|
 | Basil | Module 1: First-order time response |
-| Zaid | Module 2: First-order frequency response |
+| Ahmad | Module 2: First-order frequency response |
 | Majd | Module 3: Second-order response and state space |
-| Ahmad | Module 4: Guess the Sensor |
+| Zaid | Module 4: Guess the Sensor |
 
 ## Screenshots
 
