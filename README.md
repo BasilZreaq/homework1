@@ -8,8 +8,7 @@ Homework 1, Interfacing Techniques
 An interactive web toolkit for visualizing the dynamic behavior of first-order and second-order sensors.
 
 ## Live Website
-
-https://github.com/majdds/ENCS4380-Micromouse'
+https://github.com/BasilZreaq/homework1'
 
 ## Modules
 
