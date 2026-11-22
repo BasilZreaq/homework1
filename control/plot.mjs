@@ -18,10 +18,24 @@ export class Plot {
     if (readout) {
       canvas.addEventListener('pointermove', event => {
         this.hover = event.offsetX;
+        this.keyboardPosition = null;
         this.draw();
       });
       canvas.addEventListener('pointerleave', () => {
         this.hover = null;
+        this.draw();
+      });
+      canvas.addEventListener('keydown', event => {
+        const increments = { ArrowLeft: -.025, ArrowRight: .025 };
+        const step = increments[event.key];
+        if (step === undefined) return;
+        event.preventDefault();
+        this.keyboardPosition = Math.max(0, Math.min(1, (this.keyboardPosition ?? 0) + step));
+        this.hover = null;
+        this.draw();
+      });
+      canvas.addEventListener('blur', () => {
+        this.keyboardPosition = null;
         this.draw();
       });
     }
@@ -131,11 +145,12 @@ export class Plot {
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    if (this.hover == null || this.hover < left || this.hover > right) return;
-    const time = (this.hover - left) * duration / (right - left);
+    const cursor = this.keyboardPosition == null ? this.hover : left + this.keyboardPosition * (right - left);
+    if (cursor == null || cursor < left || cursor > right) return;
+    const time = (cursor - left) * duration / (right - left);
     ctx.strokeStyle = ink;
     ctx.lineWidth = 1;
-    line(this.hover, top, this.hover, bottom);
+    line(cursor, top, cursor, bottom);
     this.readout.textContent = [`${time.toFixed(2)} s`, ...traces.flatMap(trace => {
       const value = valueAt(trace, time);
       return value == null ? [] : [`${trace.label} ${number(value)}`];

@@ -1,20 +1,23 @@
 import { defaults, simulate, piDynamics, randomPlant, scoreChallenge, challengeSpec, validation } from './engine.mjs';
 import { arduinoSketch } from './arduino.mjs';
 import { Plot } from './plot.mjs';
+import { comparePIReference, piReference } from './pi-reference.mjs';
 
 const $ = id => document.getElementById(id);
 const fixed = (value, places = 3) => Number.isFinite(value) ? Number(value.toFixed(places)).toString() : '—';
-const lab = new URLSearchParams(location.search).get('lab') ?? 'p1';
+const params = new URLSearchParams(location.search);
+const lab = params.get('lab') ?? 'p1';
 const page = ['p1', 'p2', 'p3', 'p4', 'system', 'validation'].includes(lab) ? lab : 'p1';
 const config = {
   p1: {
     title: 'PID Playground',
-    intro: 'Compare P, PI and PID on the same first- or second-order plant. Watch how each gain changes tracking and actuator effort.',
+    intro: 'Explore how P, PI and PID change tracking and actuator effort on first- and second-order plants.',
     base: { kp: 9, ki: 0 },
     presets: [
       ['P only', { kp: 9, ki: 0, upper: 12 }],
       ['PI tracking', { kp: 1, ki: 1 }],
-      ['PID damping', { plant: 'second', zeta: .35, kp: 2.2, ki: 2.8, kd: .65 }]
+      ['PID damping', { plant: 'second', zeta: .35, kp: 2.2, ki: 2.8, kd: .65 }],
+      ['PI reference', piReference]
     ],
     prediction: ['With the same first-order plant and Kp, which controller removes the step offset?',
       ['P only', 'PI'], 1]
@@ -52,8 +55,8 @@ const config = {
   },
   system: {
     title: 'My System',
-    intro: 'Enter a first-order model from your project, record the evidence behind your specification, and simulate the Arduino controller.',
-    base: { mode: 'digital', kp: 25, ki: 25, kd: 0, gain: .045, tau: .8, lower: 0, upper: 100 }
+    intro: 'Model a first-order project plant, set performance targets, and test a sampled controller.',
+    base: { mode: 'digital', kp: 1.8, ki: 4, kd: 0, lower: 0, upper: 4 }
   },
   validation: {
     title: 'Numerical Validation',
@@ -66,6 +69,7 @@ const headings = { p1: 'P1', p2: 'P2', p3: 'P3', p4: 'P4', system: 'PROJECT APPL
 const title = `<header class="page-title">
   <p class="eyebrow">${headings[page]} · Homework 2</p>
   <h1>${current.title}</h1><p>${current.intro}</p>
+  ${page === 'system' ? '<a href="#pi-reference">View continuous PI reference</a>' : ''}
 </header>`;
 document.title = `${current.title} · ENCS4380`;
 document.querySelector(`[data-lab="${page}"]`).setAttribute('aria-current', 'page');
@@ -142,9 +146,10 @@ function diagram() {
 
 function chart(id, label, command = false) {
   return `<div class="chart ${command ? 'command' : ''}">
-    <canvas id="${id}" role="img" aria-label="${label}"></canvas>
+    <canvas id="${id}" tabindex="0" role="img" aria-label="${label}" aria-describedby="${id}-instructions ${id}-values"></canvas>
+    <span class="visually-hidden" id="${id}-instructions">Use the left and right arrow keys to inspect plotted values.</span>
     <ul id="${id}-legend" class="legend" aria-label="Plot legend"></ul>
-    <p class="chart-value" id="${id}-values"></p>
+    <p class="chart-value" id="${id}-values" aria-live="polite"></p>
   </div>`;
 }
 
@@ -180,42 +185,70 @@ const codePanel = `<section class="panel">
 const scorePanel = `<section class="panel"><div class="section-title">
   <h2>Challenge score</h2><strong id="score"></strong></div>
   <div class="table-scroll"><table>
-    <thead><tr><th scope="col">Target</th><th scope="col">Measured</th><th scope="col">Result</th></tr></thead>
+    <thead><tr><th scope="col">Target</th><th scope="col">Simulated</th><th scope="col">Result</th></tr></thead>
     <tbody id="score-rows"></tbody>
   </table></div>
   <p class="hint">Each passing target earns one point. The challenge uses a unit step and a 20 s run.</p>
 </section>`;
 
-const projectPanel = `<section class="panel"><h2>Project evidence</h2>
+const projectPanel = `<section class="panel"><h2>Plant and specification</h2>
   <p class="notice" id="project-state"></p>
   ${field('plantName', 'Project and plant name')}
   <div class="pair">${field('outputUnit', 'Output units')}${field('inputUnit', 'Actuator units')}</div>
   ${field('source', 'Measurement record or datasheet citation')}
   <div class="field"><label for="specification">Performance specification</label><textarea id="specification"></textarea></div>
-  <div class="field"><label for="justification">Why it matters for the project</label><textarea id="justification"></textarea></div>
+  <div class="field"><label for="justification">Engineering rationale</label><textarea id="justification"></textarea></div>
   <label class="check-label"><input type="checkbox" id="motorMode"> Micromouse drive motor (PWM 0–100%)</label>
   <button class="secondary" id="save-project">Save project in this browser</button>
   <p class="notice" id="save-result" role="status"></p>
 </section>`;
 
-const digits = value => value === 0 ? '0' : Math.abs(value) < .001 ? value.toExponential(3) : fixed(value, 6);
+function digits(value) {
+  if (!Number.isFinite(value)) return '—';
+  if (value !== 0 && Math.abs(value) < .001) return value.toExponential(3);
+  if (Math.abs(value) >= .001 && Math.abs(value) < .01) return Number(value.toPrecision(4)).toString();
+  return fixed(value, 6);
+}
+
+function checksTable(checks, caption, expected = 'Expected', calculated = 'Calculated') {
+  return `<div class="table-scroll">
+    <table class="check-table" role="table" aria-label="${caption}">
+      <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Check</th>
+      <th scope="col" role="columnheader">${expected}</th><th scope="col" role="columnheader">${calculated}</th>
+      <th scope="col" role="columnheader">Tolerance</th><th scope="col" role="columnheader">Result</th></tr></thead>
+      <tbody role="rowgroup">${checks.map(check => `<tr role="row"><th scope="row" role="rowheader">${check.label}</th>
+      <td role="cell">${digits(check.expected)}</td><td role="cell">${digits(check.calculated)}</td>
+      <td role="cell">${digits(check.tolerance)}</td>
+      <td role="cell" class="${check.pass ? 'pass' : 'fail'}">${check.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function piReferencePanel() {
+  const { rows, peakCommand } = comparePIReference();
+  return `<section class="panel" id="pi-reference">
+    <div class="section-title"><h2>Continuous PI reference</h2>
+      <strong>${rows.filter(row => row.pass).length}/${rows.length} passed</strong></div>
+    <p>Normalized unit step with G(s) = 1/(s + 1), Kp = 1.8, Ki = 4 and Kd = 0.</p>
+    <p>The closed-loop transfer function is (1.8s + 4)/(s² + 2.8s + 4). Its zero affects rise time and overshoot.
+    The RK4 run stays inside the ±100 command limits, with a peak command of ${fixed(peakCommand)} model units.</p>
+    ${checksTable(rows, 'PI reference comparison', 'Analytic', 'Calculated')}
+    <p class="hint">Frequency and damping come from the characteristic polynomial. Rise, overshoot, settling and error come from the step response.</p>
+    <a href="?lab=p1&amp;preset=pi-reference">Open reference in PID Playground</a>
+  </section>`;
+}
 
 function renderValidation() {
   const checks = validation();
   $('app').innerHTML = `${title}
-    <section class="panel">
+    <section class="panel" id="assignment-validation">
       <div class="section-title"><h2>Reference results</h2>
       <strong id="validation-count">${checks.filter(check => check.pass).length}/${checks.length} passed</strong></div>
       <p>Tests use G(s) = 1/(s + 1), a unit step and actuator limits ±100. The RK4 paths use integration steps of 0.01 s or less.</p>
-      <div class="table-scroll"><table>
-        <thead><tr><th scope="col">Check</th><th scope="col">Expected</th><th scope="col">Calculated</th>
-        <th scope="col">Tolerance</th><th scope="col">Result</th></tr></thead>
-        <tbody>${checks.map(check => `<tr><th scope="row">${check.label}</th><td>${digits(check.expected)}</td>
-        <td>${digits(check.calculated)}</td><td>${digits(check.tolerance)}</td>
-        <td class="${check.pass ? 'pass' : 'fail'}">${check.pass ? 'PASS' : 'FAIL'}</td></tr>`).join('')}</tbody>
-      </table></div>
+      ${checksTable(checks, 'Homework reference results')}
       <p class="hint">For PI, the characteristic equation is τs² + (1 + KKp)s + KKi = 0. Its coefficients give ωₙ and ζ. The simulated step is checked separately against 1 − e⁻ᵗ for the reference gains.</p>
-    </section>`;
+    </section>
+    ${piReferencePanel()}`;
 }
 
 function build() {
@@ -251,6 +284,7 @@ function build() {
       ${page === 'p4' ? scorePanel : ''}
       ${results()}
       ${page === 'p3' || page === 'system' ? codePanel : ''}
+      ${page === 'system' ? piReferencePanel() : ''}
     </div>
   </div>`;
   start();
@@ -288,6 +322,7 @@ function start() {
   let project = draft ?? publishedProject;
   let run;
   let frame;
+  let genericActuator;
 
   function fill(values) {
     for (const [key, value] of Object.entries(values)) {
@@ -302,8 +337,13 @@ function start() {
   function motorLimits() {
     const motor = $('motorMode')?.checked;
     if (!$('motorMode')) return;
+    if (motor && !$('lower').readOnly) {
+      genericActuator = Object.fromEntries(['lower', 'upper', 'inputUnit'].map(key => [key, $(key).value]));
+      fill({ lower: 0, upper: 100, inputUnit: '% PWM' });
+    } else if (!motor && $('lower').readOnly) {
+      fill(genericActuator);
+    }
     $('inputUnit').readOnly = $('lower').readOnly = $('upper').readOnly = motor;
-    if (motor) fill({ lower: 0, upper: 100, inputUnit: '% PWM' });
   }
 
   function readValues() {
@@ -377,9 +417,9 @@ function start() {
       if (page === 'p2') description += ' Sensor model: τₛ·dyₘ/dt + yₘ = y. At τₛ = 0 the feedback is ideal.';
       if (page === 'p1') description += ' Continuous derivative acts on the measurement to avoid an ideal step impulse.';
       if (page === 'system' && $('motorMode').checked) {
-        const pi = s && piDynamics(s);
+        const pi = s?.kd === 0 && piDynamics(s);
         description += pi ? ` Continuous, unsaturated PI reference ζ = ${fixed(pi.zeta)} (target 0.6–0.8).`
-          : ' Use the measured motor model to target a damping ratio of 0.6–0.8 where applicable.';
+          : ' The continuous PI damping target is 0.6–0.8 for Ki > 0 and Kd = 0.';
       }
       $('model-description').textContent = description;
     }
@@ -456,10 +496,10 @@ function start() {
   }
 
   function markProject() {
-    let message = 'The initial settings are illustrative. Enter your plant, measured or cited K and τ, and your own specification and rationale.';
+    let message = 'Illustrative plant settings. The source field distinguishes project measurements and datasheet values from examples.';
     if (project) {
       message = project === publishedProject ? 'Using the project data bundled with this version of the toolkit.'
-        : 'Project settings are saved in this browser. Confirm the evidence and hardware interface before submission.';
+        : 'Project record saved in this browser.';
     }
     $('project-state').textContent = message;
   }
@@ -486,6 +526,7 @@ function start() {
   }
 
   fill(startValues());
+  if (page === 'p1' && params.get('preset') === 'pi-reference') fill(piReference);
   if (page === 'system') {
     if (project) fill(project);
     markProject();
@@ -508,7 +549,6 @@ function start() {
     else if ($(input.id + '-range')) $(input.id + '-range').value = input.value;
     if (page === 'system' && (evidenceKeys.includes(input.id) || input.closest('aside'))) {
       $('save-result').textContent = '';
-      $('project-state').textContent = 'Unsaved project settings. Save to use these values in P1–P3.';
     }
     if ($('prediction-result') && page === 'p4') $('prediction-result').textContent = '';
     queue();

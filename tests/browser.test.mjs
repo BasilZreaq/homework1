@@ -28,10 +28,13 @@ async function staticResponse(request, response) {
 }
 
 test('desktop and mobile site, legacy regressions and all interactive labs', async t => {
-  const server = createServer(staticResponse);
-  await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
-  t.after(() => new Promise(resolveClose => server.close(resolveClose)));
-  const base = `http://127.0.0.1:${server.address().port}${prefix}`;
+  let base = process.env.TOOLKIT_BASE_URL;
+  if (!base) {
+    const server = createServer(staticResponse);
+    await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen));
+    t.after(() => new Promise(resolveClose => server.close(resolveClose)));
+    base = `http://127.0.0.1:${server.address().port}${prefix}`;
+  }
   const browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH || undefined });
   t.after(() => browser.close());
   const context = await browser.newContext({ viewport: { width: 1366, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
@@ -100,6 +103,9 @@ test('desktop and mobile site, legacy regressions and all interactive labs', asy
     assert.notEqual(await plotImage('response'), before);
     await page.locator('#kp-range').press('ArrowRight');
     await page.waitForFunction(() => document.getElementById('kp').value === '1.01');
+    await page.locator('#response').press('ArrowRight');
+    await waitForText('response-values', 'Plant output');
+    await page.locator('#kp').focus();
     await page.getByRole('button', { name: 'PID damping' }).click();
     assert.equal(await page.locator('#plant').inputValue(), 'second');
     assert.ok(await page.locator('#omega').isVisible());
@@ -167,15 +173,33 @@ test('desktop and mobile site, legacy regressions and all interactive labs', asy
     assert.notEqual(await plotImage('response'), original);
   });
 
-  await t.test('project values save and load back into P1–P3', async () => {
+  await t.test('PI reference comparison, PWM mode and project settings persist', async () => {
     await open('control/?lab=system');
-    await waitForText('project-state', 'illustrative');
+    await waitForText('project-state', 'Illustrative');
+    assert.equal(await page.locator('#pi-reference tbody .pass').count(), 7);
+    await screenshot('my-system-desktop');
+    await page.getByRole('link', { name: 'Open reference in PID Playground' }).click();
+    assert.equal(await page.locator('#kp').inputValue(), '1.8');
+    assert.equal(await page.locator('#ki').inputValue(), '4');
+    await waitForText('overshoot', '9.531%');
+    await page.getByText('Actuator limits and duration').click();
+    await page.locator('#lower').fill('0');
+    await page.locator('#upper').fill('1.05');
+    await waitForText('overshoot', '0.545%');
+    await open('control/?lab=system');
     await page.getByRole('button', { name: 'Save project in this browser' }).click();
     await waitForText('save-result', 'Enter the plant name');
     for (const [id, value] of Object.entries({
       plantName: 'UI test fixture', outputUnit: 'rpm', source: 'Browser test source',
       specification: 'Browser test spec', justification: 'Browser test rationale', gain: '.052', tau: '0.7'
     })) await page.locator('#' + id).fill(value);
+    await page.locator('#inputUnit').fill('V');
+    await page.check('#motorMode');
+    await waitForText('arduino', '0–100% duty command');
+    assert.equal(await page.locator('#inputUnit').inputValue(), '% PWM');
+    await page.uncheck('#motorMode');
+    await waitForText('arduino', 'from model units');
+    assert.equal(await page.locator('#inputUnit').inputValue(), 'V');
     await page.check('#motorMode');
     await waitForText('arduino', '0–100% duty command');
     await page.getByRole('button', { name: 'Save project in this browser' }).click();
@@ -194,9 +218,12 @@ test('desktop and mobile site, legacy regressions and all interactive labs', asy
   await t.test('validation and responsive layout', async () => {
     await open('control/?lab=validation');
     await waitForText('validation-count', '8/8 passed');
-    assert.equal(await page.locator('tbody .pass').count(), 8);
+    assert.equal(await page.locator('#assignment-validation tbody .pass').count(), 8);
+    assert.equal(await page.locator('#pi-reference tbody .pass').count(), 7);
     await page.setViewportSize({ width: 375, height: 812 });
-    for (const path of ['', 'control/?lab=p1', 'control/?lab=p3', 'control/?lab=validation']) {
+    for (const path of ['', 'control/?lab=p1', 'control/?lab=p2', 'control/?lab=p3', 'control/?lab=p4',
+      'control/?lab=system', 'control/?lab=validation', 'module1.html', 'ahmad_index.html',
+      'Module3-Majd.html', 'Module4_GuessTheSensor_Zaid.html']) {
       await open(path);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), path + ' overflows');
     }
@@ -204,6 +231,10 @@ test('desktop and mobile site, legacy regressions and all interactive labs', asy
     await page.getByRole('link', { name: 'Jump to plot' }).click();
     assert.ok(page.url().endsWith('#run-results'));
     await screenshot('digital-mobile');
+    await open('control/?lab=validation');
+    assert.ok(await page.locator('.table-scroll').evaluateAll(tables =>
+      tables.every(table => table.scrollWidth <= table.clientWidth)));
+    await screenshot('validation-mobile');
   });
   assert.deepEqual(errors, [], 'Any uncaught browser errors');
 });

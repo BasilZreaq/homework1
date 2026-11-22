@@ -1,11 +1,26 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { digitalUpdate, randomPlant, scoreChallenge, settingsFor, simulate, validation } from '../control/engine.mjs';
+import { comparePIReference, piReference } from '../control/pi-reference.mjs';
 
 test('all homework reference checks pass at the displayed tolerances', () => {
   const checks = validation();
   assert.equal(checks.length, 8);
   for (const row of checks) assert.ok(row.pass, JSON.stringify(row));
+});
+
+test('the project PI reference matches its analytic step, including the transfer-function zero', () => {
+  const { rows, peakCommand, nextExtremumError } = comparePIReference();
+  assert.equal(rows.length, 7);
+  for (const row of rows) assert.ok(row.pass, JSON.stringify(row));
+  assert.ok(peakCommand < piReference.upper, 'The reference controller must stay unsaturated.');
+  assert.ok(nextExtremumError < .02, 'Later peaks must stay inside the settling band.');
+  assert.ok(Math.abs(rows[3].expected - 9.53119) < 1e-5);
+  const limited = simulate({ ...piReference, lower: 0, upper: 1.05 });
+  assert.equal(limited.points[0].control, 1.05);
+  assert.equal(limited.metrics.state, 'settled');
+  assert.ok(limited.metrics.riseTime > rows[2].expected + 1);
+  assert.ok(limited.metrics.overshoot < 1);
 });
 
 test('second-order P response agrees with its underdamped analytic model', () => {
