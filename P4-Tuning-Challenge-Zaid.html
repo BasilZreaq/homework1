@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P4 · Tuning Challenge | ENCS4380</title>
+<style>
+* { box-sizing: border-box; }
+:root { font-family: Arial, sans-serif; color: #222; background: #fff; --accent: #286da8; --muted: #555; --border: #d4d9e0; --panel: #f5f7fa; }
+:root:has(.challenge) { color: #edf4ff; background: #0b1020; --accent: #79e8d2; --muted: #b9c9e7; --border: #334466; --panel: #151e32; color-scheme: dark; }
+body { margin: 0; }
+header { border-bottom: 1px solid var(--border); background: var(--panel); }
+header > div, main { max-width: 1120px; margin: auto; padding: 22px; }
+h1 { margin: 8px 0; font-size: clamp(1.5rem, 4vw, 2rem); }
+h2 { margin: 0 0 14px; font-size: 1.15rem; }
+p { line-height: 1.5; }
+small, .hint { color: var(--muted); }
+a { color: var(--accent); }
+.layout { display: grid; grid-template-columns: 265px minmax(0, 1fr); align-items: start; gap: 22px; }
+.card { background: var(--panel); border: 1px solid var(--border); padding: 16px; border-radius: 9px; margin-bottom: 16px; min-width: 0; }
+.control { margin-bottom: 15px; }
+.control label { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+input[type=range] { width: 100%; margin: 9px 0 0; accent-color: var(--accent); }
+input[type=number] { width: 6em; }
+input, select, button { font: inherit; }
+button, select { padding: 7px; }
+button { cursor: pointer; }
+select { max-width: 100%; }
+output { color: var(--accent); font-variant-numeric: tabular-nums; }
+canvas { display: block; width: 100%; height: 250px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .85rem; margin: 0; }
+.legend span { border-left: 3px solid var(--line); padding-left: 7px; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+caption { text-align: left; padding-bottom: 6px; }
+td, th { padding: 8px 4px; border-bottom: 1px solid var(--border); text-align: left; }
+pre { padding: 12px; border: 1px solid var(--border); overflow: auto; max-height: 380px; }
+@media (max-width: 740px) { .layout { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+</style>
+</head>
+<body class="challenge">
+<header><div><a href="index.html">Toolkit home</a>
+<h1>P4 · Tuning Challenge</h1><p class="hint">ENCS4380 Homework 2 · Zaid · Tune a PID controller for a hidden plant.</p></div></header>
+<main class="layout">
+<aside>
+<section class="card"><h2>Challenge <output id="round"></output></h2>
+<p id="plant" class="hint"></p>
+<div class="control"><label for="kp">Kₚ<output id="kpValue" for="kp"></output></label>
+<input id="kp" type="range" min="0" max="5" step="0.05" value="1"></div>
+<div class="control"><label for="ki">Kᵢ<output id="kiValue" for="ki"></output></label>
+<input id="ki" type="range" min="0" max="5" step="0.05" value="0"></div>
+<div class="control"><label for="kd">K𝒹<output id="kdValue" for="kd"></output></label>
+<input id="kd" type="range" min="0" max="2" step="0.05" value="0"></div>
+<button id="next">New challenge</button>
+<p class="hint">Start with Kₚ. Add Kᵢ if the output stays below the target. Try some K𝒹 if the response overshoots.</p></section>
+<section class="card"><h2>Predict, then check</h2>
+<label for="guess">Will these gains pass all three requirements?</label>
+<p><select id="guess"><option value="">Choose…</option><option value="yes">Yes</option><option value="no">No</option></select></p>
+<button id="check">Check prediction</button>
+<p id="prediction" class="hint" role="status"></p></section>
+</aside>
+<div>
+<section class="card"><h2>Closed-loop step response</h2>
+<p class="legend"><span style="--line:#79e8d2">Plant output</span><span style="--line:#b9c9e7">Setpoint</span></p>
+<canvas id="response" role="img" aria-label="Closed-loop step response compared with the target"></canvas></section>
+<section class="card"><h2>Tuning requirements</h2>
+<table>
+<thead><tr><th scope="col">Requirement</th><th scope="col">Measured</th><th scope="col">Result</th></tr></thead>
+<tbody>
+<tr><th scope="row">Overshoot ≤ 10%</th><td id="over"></td><td id="overPass"></td></tr>
+<tr><th scope="row">Settling time ≤ 5 s</th><td id="settle"></td><td id="settlePass"></td></tr>
+<tr><th scope="row">Final error ≤ 0.5%</th><td id="error"></td><td id="errorPass"></td></tr>
+</tbody></table>
+<p><strong>Score <output id="score"></output></strong></p>
+<p class="hint">The target is 1. Settling means entering and staying within ±2% of the target through the 12 s simulation. The final error uses the last sample and treats errors within 0.5% as effectively zero.</p>
+</section>
+</div>
+</main>
+<script>
+'use strict';
+
+const get = id => document.getElementById(id);
+const gains = () => ['kp', 'ki', 'kd'].map(id => Number(get(id).value));
+
+function draw(canvas, times, series, yLabel, maximum, minimum = 0) {
+  const width = canvas.clientWidth, height = canvas.clientHeight;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  const style = getComputedStyle(document.documentElement);
+  const left = 40, right = width - 12, top = 24, bottom = height - 37;
+  const finalTime = times.at(-1);
+  const x = t => left + t / finalTime * (right - left);
+  const y = value => bottom - (value - minimum) / (maximum - minimum) * (bottom - top);
+  ctx.font = '12px Arial';
+  ctx.fillStyle = style.getPropertyValue('--muted');
+  ctx.fillText(yLabel, left, 12);
+  ctx.strokeStyle = style.getPropertyValue('--border');
+  for (let tick = 0; tick <= 4; tick++) {
+    const level = minimum + (maximum - minimum) * tick / 4;
+    ctx.beginPath();
+    ctx.moveTo(left, y(level));
+    ctx.lineTo(right, y(level));
+    ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(level.toFixed(2), left - 5, y(level) + 4);
+    ctx.textAlign = 'center';
+    ctx.fillText((finalTime * tick / 4).toFixed(1), x(finalTime * tick / 4) - (tick === 4 ? 6 : 0), bottom + 16);
+  }
+  ctx.fillText('Time (s)', (left + right) / 2, height - 4);
+  for (const { values, color, dashed, stairs } of series) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(dashed ? [5, 4] : []);
+    ctx.moveTo(x(0), y(values[0]));
+    for (let i = 1; i < times.length; i++) {
+      if (stairs) ctx.lineTo(x(times[i]), y(values[i - 1]));
+      ctx.lineTo(x(times[i]), y(values[i]));
+    }
+    ctx.stroke();
+  }
+}
+
+// Settling means the response stays within 2% of the unit target.
+function measure(times, values) {
+  let lastOutside = -1, peak = 1;
+  for (let i = 0; i < values.length; i++) {
+    if (Math.abs(values[i] - 1) > 0.02) lastOutside = i;
+    peak = Math.max(peak, values[i]);
+  }
+  const settle = times[lastOutside + 1] ?? Infinity;
+  return { overshoot: (peak - 1) * 100, settle, error: Math.abs(1 - values.at(-1)) * 100 };
+}
+const seconds = value => Number.isFinite(value) ? value.toFixed(2) + ' s' : 'Outside ±2% at end';
+const percent = value => value.toFixed(2) + '%';
+
+
+const dt = 0.005;
+const times = Array.from({ length: 2401 }, (_, i) => i * dt);
+let plant, round = 0, score = 0;
+
+// Randomly choose the same two model families as HW1's Guess the Sensor.
+function randomBetween(low, high) {
+  return low + Math.random() * (high - low);
+}
+
+function simulate(model, [kp, ki, kd]) {
+  let y = 0, velocity = 0, integral = 0, priorOutput = 0, slope = 0;
+  const response = [];
+  for (const time of times) {
+    response.push(y);
+    const error = 1 - y;
+    // Differentiate the measured output and smooth the estimate over 50 ms.
+    slope += dt / 0.05 * ((y - priorOutput) / dt - slope);
+    priorOutput = y;
+    const candidate = integral + dt * error;
+    const pd = kp * error - kd * slope;
+    const trial = pd + ki * candidate;
+    // The simulated actuator can command between -4 and +4 units.
+    if (!((trial > 4 && error > 0) || (trial < -4 && error < 0))) {
+      integral = candidate;
+    }
+    const u = Math.max(-4, Math.min(4, pd + ki * integral));
+    if (model.order === 1) {
+      y += dt * (model.k * u - y) / model.tau;
+    } else {
+      const acceleration = model.wn ** 2 * (u - y) - 2 * model.z * model.wn * velocity;
+      y += dt * velocity;
+      velocity += dt * acceleration;
+    }
+  }
+  return response;
+}
+
+function render() {
+  for (const id of ['kp', 'ki', 'kd']) get(id + 'Value').textContent = Number(get(id).value).toFixed(2);
+  const values = simulate(plant, gains());
+  const result = measure(times, values);
+  draw(get('response'), times, [
+    { values: times.map(() => 1), color: '#b9c9e7', dashed: true },
+    { values, color: '#79e8d2' }
+  ], 'Output', Math.max(1.25, ...values), Math.min(0, ...values));
+  score = 0;
+  for (const [id, display, pass] of [
+    ['over', percent(result.overshoot), result.overshoot <= 10],
+    ['settle', seconds(result.settle), result.settle <= 5],
+    ['error', percent(result.error), result.error <= 0.5]
+  ]) {
+    get(id).textContent = display;
+    get(id + 'Pass').textContent = pass ? 'Pass' : 'Fail';
+    if (pass) score++;
+  }
+  get('score').textContent = score + ' / 3';
+}
+
+function newChallenge() {
+  plant = Math.random() < 0.5
+    ? { order: 1, k: randomBetween(0.8, 1.8), tau: randomBetween(0.4, 1.4) }
+    : { order: 2, z: randomBetween(0.55, 0.85), wn: randomBetween(2.8, 4.2) };
+  get('round').textContent = ++round;
+  get('plant').textContent = (plant.order === 1 ? 'First-order' : 'Second-order')
+    + ' plant. Its parameter values are hidden.';
+  get('kp').value = 1;
+  get('ki').value = 0;
+  get('kd').value = 0;
+  get('guess').value = '';
+  get('prediction').textContent = '';
+  render();
+}
+
+for (const id of ['kp', 'ki', 'kd']) {
+  get(id).addEventListener('input', () => {
+    get('prediction').textContent = '';
+    render();
+  });
+}
+get('next').addEventListener('click', newChallenge);
+get('check').addEventListener('click', () => {
+  const guess = get('guess').value;
+  if (!guess) {
+    get('prediction').textContent = 'Choose a prediction first.';
+    return;
+  }
+  const correct = (guess === 'yes') === (score === 3);
+  get('prediction').textContent = (correct ? 'Correct. ' : 'Try again. ') + score + ' of 3 requirements passed.';
+});
+window.addEventListener('resize', render);
+newChallenge();
+
+</script>
+</body>
+</html>
